@@ -23,8 +23,6 @@ class MatrixFactorization(Solver):
         learning_rate=0.01,
         max_iters=50,
         shrinkage_value=0,
-        min_value=None,
-        max_value=None,
         verbose=True,
     ):
         """
@@ -47,16 +45,10 @@ class MatrixFactorization(Solver):
         shrinkage_value : (float)
             Regularization term for sgd penalty
 
-        min_value : float
-            Smallest possible imputed value
-
-        max_value : float
-            Largest possible imputed value
-
         verbose : (bool)
             Whether or not to printout training progress
         """
-        Solver.__init__(self, min_value=min_value, max_value=max_value)
+        Solver.__init__(self)
         self.rank = rank
         self.learning_rate = learning_rate
         self.max_iters = max_iters
@@ -75,14 +67,10 @@ class MatrixFactorization(Solver):
         self.user_vecs = np.random.normal(scale=1.0 / self.rank, size=(n_samples, self.rank))
         self.item_vecs = np.random.normal(scale=1.0 / self.rank, size=(n_features, self.rank))
 
-        self.user_bias = np.zeros(n_samples)
-        self.item_bias = np.zeros(n_features)
-        self.global_bias = np.mean(X[observed_mask])
-
         for i in range(self.max_iters):
             # to do: early stopping
             if (i + 1) % 10 == 0 and self._v:
-                X_reconstruction = self.clip(self.predict_all())
+                X_reconstruction = self.predict_all()
                 mae = masked_mae(X_true=X, X_pred=X_reconstruction, mask=observed_mask)
                 print("[MatrixFactorization] Iter %d: observed MAE=%0.6f rank=%d" % (i + 1, mae, self.rank))
 
@@ -90,8 +78,7 @@ class MatrixFactorization(Solver):
             self.sgd(X, training_indices)
             i += 1
 
-        X_filled = X.copy()
-        X_filled[missing_mask] = self.clip(self.predict_all()[missing_mask])
+        X_filled = self.predict_all()
         return X_filled
 
     def sgd(self, X, training_indices):
@@ -99,10 +86,6 @@ class MatrixFactorization(Solver):
         for (u, i) in training_indices:
             prediction = self.predict(u, i)
             e = X[u, i] - prediction  # error
-
-            # Update biases
-            self.user_bias[u] += self.learning_rate * (e - self.shrinkage_value * self.user_bias[u])
-            self.item_bias[i] += self.learning_rate * (e - self.shrinkage_value * self.item_bias[i])
 
             # Update latent factors
             self.user_vecs[u, :] += self.learning_rate * (
@@ -114,12 +97,10 @@ class MatrixFactorization(Solver):
 
     def predict(self, u, i):
         """ Single user and item prediction."""
-        prediction = self.global_bias + self.user_bias[u] + self.item_bias[i]
-        prediction += self.user_vecs[u, :].dot(self.item_vecs[i, :].T)
+        prediction = self.user_vecs[u, :].dot(self.item_vecs[i, :].T)
         return prediction
 
     def predict_all(self):
         """ Predict ratings for every user and item."""
         predictions = self.user_vecs.dot(self.item_vecs.T)
-        predictions += self.global_bias + self.user_bias[:, np.newaxis] + self.item_bias[np.newaxis, :]
         return predictions

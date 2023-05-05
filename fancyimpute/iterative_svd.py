@@ -29,14 +29,11 @@ class IterativeSVD(Solver):
             gradual_rank_increase=True,
             svd_algorithm="arpack",
             init_fill_method="zero",
-            min_value=None,
-            max_value=None,
             verbose=True):
         Solver.__init__(
             self,
             fill_method=init_fill_method,
-            min_value=min_value,
-            max_value=max_value)
+        )
         self.rank = rank
         self.max_iters = max_iters
         self.svd_algorithm = svd_algorithm
@@ -73,7 +70,6 @@ class IterativeSVD(Solver):
             tsvd = TruncatedSVD(curr_rank, algorithm=self.svd_algorithm)
             X_reduced = tsvd.fit_transform(X_filled)
             X_reconstructed = tsvd.inverse_transform(X_reduced)
-            X_reconstructed = self.clip(X_reconstructed)
             mae = masked_mae(
                 X_true=X,
                 X_pred=X_reconstructed,
@@ -86,7 +82,7 @@ class IterativeSVD(Solver):
                 X_old=X_filled,
                 X_new=X_reconstructed,
                 missing_mask=missing_mask)
-            X_filled[missing_mask] = X_reconstructed[missing_mask]
+            X_filled = X_reconstructed
             if converged:
                 break
         return X_filled
